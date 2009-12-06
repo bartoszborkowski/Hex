@@ -5,9 +5,11 @@ import re
 from math import sqrt
 import operator
 import random
+import signal
+import os
 
 ALPHA = 2.0		#alfa 4 UCB
-
+PRIOR = (1,2)		#priot 4 UCB	(wins, visits)
 
 
 
@@ -78,11 +80,14 @@ class Parser:
 
 
 
-
 #Z GRUBSZA: ZAWARTOSC DAWNEGO PLIKU 'ucb'
 
-def testingJudge(paramsValuesMap):	#TODO: niech to zwraca wynik meczu!
-    return random.randint(0,1)
+def testingJudge(paramsValuesMap):	#TODO: niech to zwraca (liczba_wygranych, liczba_rozgrywek)!
+#    print "CALL JUDGE:"
+#    hej = os.system("./judge-static -s -P 0 -T 100000 -i plik_11.txt ./random-engine ./random-engine2  | tail -n 1 | cut \"-d \" -f 2 | cut -c 7")
+#    hej = os.system("true")
+#    print " xxxxxx: " + str(hej)
+    return (random.randint(0,1),1)
 
 
 class UCBElem:		#element of UCB-struct (contains one parameter combination)
@@ -92,11 +97,10 @@ class UCBElem:		#element of UCB-struct (contains one parameter combination)
     wins = 0
     visits = 0
     def __init__(self):
-	self.visits = 1		#prior_visits - prior_wins
-	self.update(1)		#prior_wins
-    def update(self, win_part):
-	self.wins = self.wins + win_part
-	self.visits = self.visits + 1
+	self.update(PRIOR)	#prior
+    def update(self, results):
+	self.wins = self.wins + results[0]
+	self.visits = self.visits + results[1]
 	self.win_rate = 1.0*self.wins / self.visits
 	self.value = self.win_rate + ALPHA/sqrt(self.visits)
     def __repr__(self):
@@ -111,6 +115,8 @@ class UCBElem:		#element of UCB-struct (contains one parameter combination)
 
 class UCB:	#call analyze() few times, and at last: bestElementsList()
     elements = "" 	#must be initialized by calling setParams
+    visitsTotal = 0
+    playedGames = 0
     def setParams(self, new_params):
 	self.elements = set([])
 	for param in new_params:
@@ -125,8 +131,11 @@ class UCB:	#call analyze() few times, and at last: bestElementsList()
 	return max_list[random_idx]
     
     def analyze(self, function):	#function must return INT!
+	self.visitsTotal += 1
 	toAnalyze = self.elementToAnalyze()
-	toAnalyze.update(function(toAnalyze.parameters))
+	resultTuple = function(toAnalyze.parameters)
+	self.playedGames += resultTuple[1]
+	toAnalyze.update(resultTuple)
 	pass	#TODO: call function(self.elementToAnalyze()), and update
 
     def bestParamsList(self):
@@ -138,7 +147,22 @@ class UCB:	#call analyze() few times, and at last: bestElementsList()
     def bestElementsList(self):
 	return sorted(self.elements, key=operator.attrgetter('win_rate'), reverse=True)
     
-
+    def returnBestParamsString(self, rows_num):
+	ret = "total visits: %d (played games: %d)\n" % (self.visitsTotal, self.playedGames)
+	for elem in self.bestElementsList()[0:rows_num]:
+	    ret += "\t"
+	    for paramName in elem.parameters:
+		ret += paramName + "=" + elem.parameters[paramName] + ", "
+	    ret += "\t"
+	    ret += str(elem.win_rate) + " (wins: " + str(elem.wins) + " / visits: "  + str(elem.visits) + ")  "
+	    ret += "\n"
+#	return ret
+	ret += "\n"
+	return ret
+    
+    
+def printHandler(ucb, signum, frame):
+    print "\nPARTIAL RESULTS\t" + ucb.returnBestParamsString(6)
 
 
 
@@ -154,16 +178,20 @@ ucb.setParams(Parser().ParseParameters())
 print "\nPO ZALADOWANIU PARAMETROW, A PRZED ROZGRYWKA MECZY:"
 print ucb.elements
 
-for i in range(10000):
+
+print "\nSTART ROZGRYWEK (uzyj Ctrl+C, by wypisac wyniki czesciowe):"
+signal.signal(signal.SIGINT, lambda x,y: printHandler(ucb, x, y))	#ustawienie obslugi sygnalu Ctrl+C
+for i in range(100000):
     ucb.analyze(testingJudge)	#testingJudge - funkcja z 1arg: mapa "nazwa->wartosc", zwracajaca:
-				#1, jesli wygrana testowanego zestawu param
-				#0 wpp
+				#krotke (liczba_wygranych, liczba_rozgrywek)
 
 print "\nPO 10tys NIBY_ROZGRYWKACH, posortowane wg najlepszego zestawu parametrow (czyli wg win_rate):"
 #print ucb.bestParamsList()	#<<< to jest posortowana lista map "nazwa->wartosc"
 print ucb.bestElementsList()	#< a to - lista elementow 'krzewu UCB'
 
+print ucb.returnBestParamsString(5)
 
 
 
 
+print "SYF SYF SYF SYF SYF SYF SYF SYF SYF SYF SYF SYF SYF SYF SYF SYF SYF"
