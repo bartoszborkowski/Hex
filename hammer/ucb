@@ -1,0 +1,87 @@
+#! /usr/bin/env python
+
+from math import sqrt
+import operator
+import random
+
+ALPHA = 1.0
+
+def testingJudge(paramsValuesMap):
+    print paramsValuesMap
+    print paramsValuesMap['alfa']
+    return round(float(paramsValuesMap['alfa']) / 201)
+#    return random.randint(0,)
+
+class UCBElem:
+    parameters = {}	#must be initialized by creator!
+    value = float('inf')
+    win_rate = 0
+    wins = 0
+    visits = 0
+    def __init__(self):
+	self.update(1)		#prior
+    def update(self, win_part):
+	self.wins = self.wins + win_part
+	self.visits = self.visits + 1
+	self.win_rate = 1.0*self.wins / self.visits
+	self.value = self.win_rate + ALPHA/sqrt(self.visits)
+    def __repr__(self):
+	retRepr = "ELEM("
+	for name in self.parameters:
+	    retRepr = retRepr + name + "=" + self.parameters[name] +" "
+	retRepr = retRepr + " win:%d vis: %d " % (self.wins, self.visits)
+	retRepr = retRepr + "(rate:%f) val: %f)\n" % (self.win_rate, self.value)
+	return retRepr
+	
+
+class UCB:	#call analyze() few times, and at last: bestElementsList()
+    elements = set([])	#must be initialized by calling setParams
+    def setParams(self, new_params):
+	for param in new_params:
+	    elem = UCBElem()
+	    elem.parameters = param
+	    self.elements.add(elem)
+		
+    def elementToAnalyze(self):	
+	maximum = max(self.elements, key=operator.attrgetter('value')).value
+	max_list = filter(lambda(x):(x.value==maximum), self.elements)
+	random_idx = random.randint(0,len(max_list)-1)
+	return max_list[random_idx]
+    
+    def analyze(self, function):	#function must return INT!
+	toAnalyze = self.elementToAnalyze()
+	toAnalyze.update(function(toAnalyze.parameters))
+	pass	#TODO: call function(self.elementToAnalyze()), and update
+
+    def bestParamsList(self):
+	retList = []
+	for elem in self.bestElementsList():
+	    retList.append(elem.parameters)
+	return retList
+    
+    def bestElementsList(self):
+	return sorted(el, key=operator.attrgetter('win_rate'), reverse=True)
+    
+    
+
+
+slownik = {'alfa':'100.67', 'Beta':'166.0'}
+slownik2 = {'alfa':'200.67', 'Beta':'266.0'}
+slownik3 = {'alfa':'300.67', 'Beta':'366.0'}
+slownik4 = {'alfa':'400.67', 'Beta':'466.0'}
+
+zbior = [slownik, slownik2, slownik3, slownik4]
+
+
+ucb = UCB()
+ucb.setParams(zbior)
+print ucb.elements	#test
+
+print ucb.elementToAnalyze()	#test
+
+ucb.analyze(testingJudge)
+ucb.analyze(testingJudge)
+ucb.analyze(testingJudge)
+print ucb.elements	#test
+
+#print round('111.11')
