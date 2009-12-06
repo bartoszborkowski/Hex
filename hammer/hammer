@@ -7,9 +7,15 @@ import operator
 import random
 import signal
 import os
+import threading
+import thread
+import time
 
-ALPHA = 2.0		#alfa 4 UCB
+ALPHA = 3.0		#alfa 4 UCB
 PRIOR = (1,2)		#priot 4 UCB	(wins, visits)
+
+SAFE_THREADS_NUM = 20	#threads number restrictions
+MAX_THREADS_NUM = 20
 
 
 
@@ -81,28 +87,34 @@ class Parser:
 
 
 #Z GRUBSZA: ZAWARTOSC DAWNEGO PLIKU 'ucb'
-
+		#testingJudge - funkcja z 1arg: mapa "nazwa->wartosc", zwracajaca krotke (liczba_wygranych, liczba_rozgrywek)
 def testingJudge(paramsValuesMap):	#TODO: niech to zwraca (liczba_wygranych, liczba_rozgrywek)!
-#    print "CALL JUDGE:"
-#    hej = os.system("./judge-static -s -P 0 -T 100000 -i plik_11.txt ./random-engine ./random-engine2  | tail -n 1 | cut \"-d \" -f 2 | cut -c 7")
-#    hej = os.system("true")
-#    print " xxxxxx: " + str(hej)
-    return (random.randint(0,1),1)
+    result = os.system("./runner1")	#TODO: parametry dla runner1'a...
+#    print "result: " + str(result)		#WARNING: 'result: 0' means 0, printing 'result: 256' means 1
+    if result == 0:
+	return (0,1)
+    else:
+	return (1,1)
+#    return (random.randint(0,1),1)
 
 
 class UCBElem:		#element of UCB-struct (contains one parameter combination)
     parameters = ""	#must be initialized by creator!
+    sem = ""
     value = float('inf')
     win_rate = 0
     wins = 0
     visits = 0
     def __init__(self):
-	self.update(PRIOR)	#prior
+	self.sem = threading.Semaphore()
+	self.update(PRIOR)		#prior
     def update(self, results):
+	self.sem.acquire()	#P()
 	self.wins = self.wins + results[0]
 	self.visits = self.visits + results[1]
 	self.win_rate = 1.0*self.wins / self.visits
 	self.value = self.win_rate + ALPHA/sqrt(self.visits)
+	self.sem.release()	#V()
     def __repr__(self):
 	retRepr = "ELEM({"
 	for name in self.parameters:
@@ -117,6 +129,7 @@ class UCB:	#call analyze() few times, and at last: bestElementsList()
     elements = "" 	#must be initialized by calling setParams
     visitsTotal = 0
     playedGames = 0
+
     def setParams(self, new_params):
 	self.elements = set([])
 	for param in new_params:
@@ -127,8 +140,11 @@ class UCB:	#call analyze() few times, and at last: bestElementsList()
     def elementToAnalyze(self):	
 	maximum = max(self.elements, key=operator.attrgetter('value')).value
 	max_list = filter(lambda(x):(x.value==maximum), self.elements)
+	if not max_list:  #jesli ktos nam podebral, sprobujemy jeszcze raz...
+	    return self.elementToAnalyze()
 	random_idx = random.randint(0,len(max_list)-1)
-	return max_list[random_idx]
+	ret = max_list[random_idx]
+	return ret
     
     def analyze(self, function):	#function must return INT!
 	self.visitsTotal += 1
@@ -136,7 +152,6 @@ class UCB:	#call analyze() few times, and at last: bestElementsList()
 	resultTuple = function(toAnalyze.parameters)
 	self.playedGames += resultTuple[1]
 	toAnalyze.update(resultTuple)
-	pass	#TODO: call function(self.elementToAnalyze()), and update
 
     def bestParamsList(self):
 	retList = []
@@ -169,6 +184,8 @@ def printHandler(ucb, signum, frame):
 
 
 
+
+
 	#PRZYKLAD UZYCIA
 print "trueTEST & EXAMPLE EXAMPLE EXAMPLE EXAMPLE EXAMPLE EXAMPLE EXAMPLE EXAMPLE & trueTEST "
 
@@ -179,13 +196,38 @@ print "\nPO ZALADOWANIU PARAMETROW, A PRZED ROZGRYWKA MECZY:"
 print ucb.elements
 
 
+
 print "\nSTART ROZGRYWEK (uzyj Ctrl+C, by wypisac wyniki czesciowe):"
 signal.signal(signal.SIGINT, lambda x,y: printHandler(ucb, x, y))	#ustawienie obslugi sygnalu Ctrl+C
-for i in range(100000):
-    ucb.analyze(testingJudge)	#testingJudge - funkcja z 1arg: mapa "nazwa->wartosc", zwracajaca:
-				#krotke (liczba_wygranych, liczba_rozgrywek)
+	    #TODO: obsluga sygnalow przestala dzialac (przez uruchamianie runner1...) :-/
 
-print "\nPO 10tys NIBY_ROZGRYWKACH, posortowane wg najlepszego zestawu parametrow (czyli wg win_rate):"
+
+threadsSet = set()
+for i in range(1000):	#number of 'playouts'
+    new_thread = threading.Thread(None, ucb.analyze, None, (testingJudge, ), {})
+    threadsSet.add(new_thread)
+    new_thread.start()
+    if i % 100 == 0:	#sometimes we need to join finished threads
+	threadsToRemove = set([])
+	for th in threadsSet:
+	    if not th.isAlive():
+		th.join()
+		threadsToRemove.add(th)
+	for thR in threadsToRemove:
+	    threadsSet.remove(thR)
+	print str(i) + "  th:" + str(threading.activeCount()) + "  set:" + str(len(threadsSet))	#XXX
+	
+    if MAX_THREADS_NUM < threading.activeCount():#too many threads running, so:
+	while SAFE_THREADS_NUM < threading.activeCount():
+	    time.sleep(1)
+	
+	
+for th in threadsSet:	#finishing
+    th.join()
+    
+    
+
+print "\nPO 1tys NIBY_ROZGRYWKACH, posortowane wg najlepszego zestawu parametrow (czyli wg win_rate):"
 #print ucb.bestParamsList()	#<<< to jest posortowana lista map "nazwa->wartosc"
 print ucb.bestElementsList()	#< a to - lista elementow 'krzewu UCB'
 
