@@ -1,0 +1,169 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+import re
+from math import sqrt
+import operator
+import random
+
+ALPHA = 2.0		#alfa 4 UCB
+
+
+
+
+class RemoteMachine:	#TODO: maybe simple string will be better...
+			#or we will make it contain number of cores of machine...?
+	# RemoteMachine holds the name of a remote machine as specified in remote.conf
+	name = ""
+	def __init__(self, _name):
+		self.name = _name
+	def __repr__(self):
+		return "RemoteMachine(" + self.name + ")\n"
+
+class Parser:
+	# Parser parses the two files: parameter.conf and remote.conf
+	# Parser's main function: Parse returns a pair of lists:
+	# the first list is a list of maps "paramName->paramValue"
+	# in that list all possible combination of parameter values
+	# are held
+	# the second in a list of RemoteMachines, where
+	# information about all remote machines is held
+	def ParseParameters(self):
+		paramFile = open('./parameter.conf', 'r')
+		paramCmds = []
+		paramVals = []
+		result = []		#lista map "nazwa->wartosc"
+		def ParseParameterList(start):
+			result = []
+			if (start == len(paramVals) - 1):
+				[result.append([i]) for i in paramVals[start]]
+			else:
+				[result.append(j + [i]) for i in paramVals[start] for j in ParseParameterList(start + 1)]
+			return result
+		for line in paramFile:
+			l = []
+			spLine = re.split(' |\n', line)
+			paramCmds.append(spLine.pop(0))
+			for i in range(len(spLine) - 1):
+				l.append(spLine[i])
+			paramVals.append(l)
+		paramCmds.reverse()
+#		print ParseParameterList(0)
+		for valList in ParseParameterList(0):
+			params = {}
+			for i in range(len(paramCmds)):
+				params[paramCmds[i]] = valList[i]
+			
+			result.append(params)
+		paramFile.close()
+		return result
+
+	def ParseRemoteMachines(self):
+		paramFile = open('./remote.conf', 'r')
+		result = []
+		for line in paramFile:
+			spLine = re.split('\n', line)
+			result.append(RemoteMachine(spLine[0]))
+		paramFile.close()
+		return result
+
+	def Parse(self):
+		return (self.ParseParameters(), self.ParseRemoteMachines())
+
+
+
+
+
+
+
+
+
+
+#Z GRUBSZA: ZAWARTOSC DAWNEGO PLIKU 'ucb'
+
+def testingJudge(paramsValuesMap):	#TODO: niech to zwraca wynik meczu!
+    return random.randint(0,1)
+
+
+class UCBElem:		#element of UCB-struct (contains one parameter combination)
+    parameters = ""	#must be initialized by creator!
+    value = float('inf')
+    win_rate = 0
+    wins = 0
+    visits = 0
+    def __init__(self):
+	self.visits = 1		#prior_visits - prior_wins
+	self.update(1)		#prior_wins
+    def update(self, win_part):
+	self.wins = self.wins + win_part
+	self.visits = self.visits + 1
+	self.win_rate = 1.0*self.wins / self.visits
+	self.value = self.win_rate + ALPHA/sqrt(self.visits)
+    def __repr__(self):
+	retRepr = "ELEM({"
+	for name in self.parameters:
+	    retRepr = retRepr + name + "->" + self.parameters[name] +" "
+	retRepr = retRepr + "} win:%d vis: %d " % (self.wins, self.visits)
+	retRepr = retRepr + "(rate:%f) val: %f)\n" % (self.win_rate, self.value)
+	return retRepr
+
+	
+
+class UCB:	#call analyze() few times, and at last: bestElementsList()
+    elements = "" 	#must be initialized by calling setParams
+    def setParams(self, new_params):
+	self.elements = set([])
+	for param in new_params:
+	    elem = UCBElem()
+	    elem.parameters = param
+	    self.elements.add(elem)
+		
+    def elementToAnalyze(self):	
+	maximum = max(self.elements, key=operator.attrgetter('value')).value
+	max_list = filter(lambda(x):(x.value==maximum), self.elements)
+	random_idx = random.randint(0,len(max_list)-1)
+	return max_list[random_idx]
+    
+    def analyze(self, function):	#function must return INT!
+	toAnalyze = self.elementToAnalyze()
+	toAnalyze.update(function(toAnalyze.parameters))
+	pass	#TODO: call function(self.elementToAnalyze()), and update
+
+    def bestParamsList(self):
+	retList = []
+	for elem in self.bestElementsList():
+	    retList.append(elem.parameters)
+	return retList
+    
+    def bestElementsList(self):
+	return sorted(self.elements, key=operator.attrgetter('win_rate'), reverse=True)
+    
+
+
+
+
+
+
+
+	#PRZYKLAD UZYCIA
+print "trueTEST & EXAMPLE EXAMPLE EXAMPLE EXAMPLE EXAMPLE EXAMPLE EXAMPLE EXAMPLE & trueTEST "
+
+ucb = UCB()
+ucb.setParams(Parser().ParseParameters())
+
+print "\nPO ZALADOWANIU PARAMETROW, A PRZED ROZGRYWKA MECZY:"
+print ucb.elements
+
+for i in range(10000):
+    ucb.analyze(testingJudge)	#testingJudge - funkcja z 1arg: mapa "nazwa->wartosc", zwracajaca:
+				#1, jesli wygrana testowanego zestawu param
+				#0 wpp
+
+print "\nPO 10tys NIBY_ROZGRYWKACH, posortowane wg najlepszego zestawu parametrow (czyli wg win_rate):"
+#print ucb.bestParamsList()	#<<< to jest posortowana lista map "nazwa->wartosc"
+print ucb.bestElementsList()	#< a to - lista elementow 'krzewu UCB'
+
+
+
+
+
