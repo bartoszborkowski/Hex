@@ -9,18 +9,6 @@ fi
 program=$1
 parameters=$2
 
-if [[ ! -x $program ]]
-then
-    echo "Invalid program."
-    exit -1
-fi
-
-if [[ ! -r $parameters ]]
-then
-    echo "Invalid parameters file."
-    exit -1
-fi
-
 cat << "EOF"
 function read_eqs()
 {
