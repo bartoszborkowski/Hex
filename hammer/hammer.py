@@ -10,16 +10,14 @@ import os
 import threading
 import thread
 import time
+import sys
 from subprocess import Popen, PIPE
 from tempfile import NamedTemporaryFile
 
 ALPHA = 3.0		#alfa 4 UCB
 PRIOR = (1,2)		#priot 4 UCB	(wins, visits)
 
-SAFE_THREADS_NUM = 20	#threads number restrictions
-MAX_THREADS_NUM = 20
-
-
+THREADS_NUM = 3
 
 class RemoteMachine:	#TODO: maybe simple string will be better...
 			#or we will make it contain number of cores of machine...?
@@ -88,7 +86,7 @@ def ParametersTempFile(params):
     return tmp.name
 
 #testingJudge - funkcja z 1arg: mapa "nazwa->wartosc", zwracajaca krotke (liczba_wygranych, liczba_rozgrywek)
-def testingJudge(paramsValuesMap):
+def testing_judge(paramsValuesMap):
     parameters_file = ParametersTempFile(paramsValuesMap)
     match = Popen(['./match.py', './engine', './engine', parameters_file], stdout=PIPE, stderr=PIPE)
     result = match.wait()
@@ -103,142 +101,135 @@ def testingJudge(paramsValuesMap):
     else:
         return (1, 1)
 
-class UCBElem:		#element of UCB-struct (contains one parameter combination)
-    parameters = ""	#must be initialized by creator!
-    sem = ""
-    value = float('inf')
-    win_rate = 0
-    wins = 0
-    visits = 0
-    def __init__(self):
-	self.sem = threading.Semaphore()
-	self.update(PRIOR)		#prior
+class UcbElem: #element of UCB-struct (contains one parameter combination)
+    def __init__(self, parameters):
+        self.parameters = parameters;
+        self.wins = 0
+        self.visits = 0
+        self.win_rate = 0.0
+        self.value = float('inf')
+        self.update(PRIOR)
+
     def update(self, results):
-	self.sem.acquire()	#P()
-	self.wins = self.wins + results[0]
-	self.visits = self.visits + results[1]
-	self.win_rate = 1.0*self.wins / self.visits
-	self.value = self.win_rate + ALPHA/sqrt(self.visits)
-	self.sem.release()	#V()
+        self.wins = self.wins + results[0]
+        self.visits = self.visits + results[1]
+        self.win_rate = 1.0 * self.wins / self.visits
+        self.value = self.win_rate + ALPHA/sqrt(self.visits)
+
     def __repr__(self):
-	retRepr = "ELEM({"
-	for name in self.parameters:
-	    retRepr = retRepr + name + "->" + self.parameters[name] +" "
-	retRepr = retRepr + "} win:%d vis: %d " % (self.wins, self.visits)
-	retRepr = retRepr + "(rate:%f) val: %f)\n" % (self.win_rate, self.value)
-	return retRepr
+        retRepr = "ELEM({"
+        for name in self.parameters:
+            retRepr = retRepr + name + "->" + self.parameters[name] +" "
+        retRepr = retRepr + "} win:%d vis: %d " % (self.wins, self.visits)
+        retRepr = retRepr + "(rate:%f) val: %f)\n" % (self.win_rate, self.value)
+        return retRepr
 
+class Ucb: #call analyze() few times, and at last: bestElementsList()
+    def __init__(self, params):
+        self.elements = []
+        for param in params:
+            elem = UcbElem(param)
+            self.elements.append(elem)
+        self.visits_total = 0
+        self.played_games = 0
+        self.lock = threading.Lock()
 
+    def element_to_analyze(self): #assume lock is aquired
+        maximum = max(self.elements, key=operator.attrgetter('value')).value
+        max_list = filter(lambda(x):(x.value == maximum), self.elements)
+        random_idx = random.randint(0, len(max_list) - 1)
+        return max_list[random_idx]
 
-class UCB:	#call analyze() few times, and at last: bestElementsList()
-    elements = "" 	#must be initialized by calling setParams
-    visitsTotal = 0
-    playedGames = 0
+    def analyze(self, function): #function must return INT!
+        with self.lock:
+            self.visits_total += 1
+            to_analyze = self.element_to_analyze()
 
-    def setParams(self, new_params):
-	self.elements = set([])
-	for param in new_params:
-	    elem = UCBElem()
-	    elem.parameters = param
-	    self.elements.add(elem)
+        result_tuple = function(to_analyze.parameters)
 
-    def elementToAnalyze(self):
-	maximum = max(self.elements, key=operator.attrgetter('value')).value
-	max_list = filter(lambda(x):(x.value==maximum), self.elements)
-	if not max_list:  #jesli ktos nam podebral, sprobujemy jeszcze raz...
-	    return self.elementToAnalyze()
-	random_idx = random.randint(0,len(max_list)-1)
-	ret = max_list[random_idx]
-	return ret
+        with self.lock:
+            self.played_games += result_tuple[1]
+            to_analyze.update(result_tuple)
 
-    def analyze(self, function):	#function must return INT!
-	self.visitsTotal += 1
-	toAnalyze = self.elementToAnalyze()
-	resultTuple = function(toAnalyze.parameters)
-	self.playedGames += resultTuple[1]
-	toAnalyze.update(resultTuple)
+    def best_params_list(self):
+        retList = []
+        for elem in self.bestElementsList():
+            retList.append(elem.parameters)
+        return retList
 
-    def bestParamsList(self):
-	retList = []
-	for elem in self.bestElementsList():
-	    retList.append(elem.parameters)
-	return retList
+    def best_elements_list(self):
+        return sorted(self.elements, key=operator.attrgetter('win_rate'), reverse=True)
 
-    def bestElementsList(self):
-	return sorted(self.elements, key=operator.attrgetter('win_rate'), reverse=True)
+    def summary(self, rows_num):
+        ret = "total visits: %d (played games: %d)\n" % (self.visits_total, self.played_games)
+        for elem in self.best_elements_list()[:rows_num]:
+            ret += "\t"
+            for paramName in elem.parameters:
+                ret += paramName + "=" + elem.parameters[paramName] + ", "
+            ret += "\t"
+            ret += str(elem.win_rate) + " (wins: " + str(elem.wins) + " / visits: "  + str(elem.visits) + ")  "
+            ret += "\n"
+        return ret
 
-    def returnBestParamsString(self, rows_num):
-	ret = "total visits: %d (played games: %d)\n" % (self.visitsTotal, self.playedGames)
-	for elem in self.bestElementsList()[0:rows_num]:
-	    ret += "\t"
-	    for paramName in elem.parameters:
-		ret += paramName + "=" + elem.parameters[paramName] + ", "
-	    ret += "\t"
-	    ret += str(elem.win_rate) + " (wins: " + str(elem.wins) + " / visits: "  + str(elem.visits) + ")  "
-	    ret += "\n"
-#	return ret
-	ret += "\n"
-	return ret
-
-
-def printHandler(ucb, signum, frame):
-    print "\nPARTIAL RESULTS\t" + ucb.returnBestParamsString(6)
-
-
-
-
-
-
-
-
-	#PRZYKLAD UZYCIA
-print "trueTEST & EXAMPLE EXAMPLE EXAMPLE EXAMPLE EXAMPLE EXAMPLE EXAMPLE EXAMPLE & trueTEST "
-
-ucb = UCB()
-ucb.setParams(Parser().ParseParameters())
-
-print "\nPO ZALADOWANIU PARAMETROW, A PRZED ROZGRYWKA MECZY:"
-print ucb.elements
-
-
-
-print "\nSTART ROZGRYWEK (uzyj Ctrl+C, by wypisac wyniki czesciowe):"
-signal.signal(signal.SIGINT, lambda x,y: printHandler(ucb, x, y))	#ustawienie obslugi sygnalu Ctrl+C
+#signal.signal(signal.SIGINT, lambda x,y: printHandler(ucb, x, y))	#ustawienie obslugi sygnalu Ctrl+C
 	    #TODO: obsluga sygnalow przestala dzialac (przez uruchamianie runner1...) :-/
 
+class UcbThread(threading.Thread):
+    def __init__(self, ucb):
+        self.ucb = ucb
+        self.done = False
+        self.lock = threading.Lock()
+        threading.Thread.__init__(self)
 
-threadsSet = set()
-for i in xrange(1000):	#number of 'playouts'
-    new_thread = threading.Thread(None, ucb.analyze, None, (testingJudge, ), {})
-    threadsSet.add(new_thread)
-    new_thread.start()
-    if i % 100 == 0:	#sometimes we need to join finished threads
-	threadsToRemove = set([])
-	for th in threadsSet:
-	    if not th.isAlive():
-		th.join()
-		threadsToRemove.add(th)
-	for thR in threadsToRemove:
-	    threadsSet.remove(thR)
-	print str(i) + "  th:" + str(threading.activeCount()) + "  set:" + str(len(threadsSet))	#XXX
+    def run(self):
+        for i in xrange(50):
+            with self.lock:
+                if self.done:
+                    break
+            self.ucb.analyze(testing_judge)
 
-    if MAX_THREADS_NUM < threading.activeCount():#too many threads running, so:
-	while SAFE_THREADS_NUM < threading.activeCount():
-	    time.sleep(1)
+    def quit(self):
+        with self.lock:
+            self.done = True
 
+class ConsoleThread(threading.Thread):
+    def __init__(self, ucb, threads):
+        threading.Thread.__init__(self)
+        self.ucb = ucb
+        self.threads = threads
+        self.daemon = True
 
-for th in threadsSet:	#finishing
-    th.join()
+    def run(self):
+        while sys.stdin:
+            print 'hammer> ',
+            line = sys.stdin.readline()
+            if line == 'quit\n' or line == 'q\n':
+                self.quit()
+                break
+            else:
+                self.stat()
 
+    def stat(self):
+        print 'Partial results:', self.ucb.summary(5)
 
+    def quit(self):
+        print 'Quit scheduled'
+        for thread in self.threads:
+            thread.quit()
 
-print "\nPO 1tys NIBY_ROZGRYWKACH, posortowane wg najlepszego zestawu parametrow (czyli wg win_rate):"
-#print ucb.bestParamsList()	#<<< to jest posortowana lista map "nazwa->wartosc"
-print ucb.bestElementsList()	#< a to - lista elementow 'krzewu UCB'
+parser = Parser()
+ucb = Ucb(parser.ParseParameters())
 
-print ucb.returnBestParamsString(5)
+ucb_threads = []
+for i in xrange(THREADS_NUM):
+    thread = UcbThread(ucb)
+    thread.start()
+    ucb_threads.append(thread)
 
+console = ConsoleThread(ucb, ucb_threads)
+console.start()
 
+for thread in ucb_threads:
+    thread.join()
 
-
-print "SYF SYF SYF SYF SYF SYF SYF SYF SYF SYF SYF SYF SYF SYF SYF SYF SYF"
+print "Results:", ucb.summary(10)
