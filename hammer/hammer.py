@@ -78,19 +78,13 @@ class Parser:
 	def Parse(self):
 		return (self.ParseParameters(), self.ParseRemoteMachines())
 
-def ParametersTempFile(params):
-    tmp = NamedTemporaryFile(prefix='params-', dir='.', delete=False)
-    for k, v in params.iteritems():
-        print >>tmp, k, v
-    tmp.close()
-    return tmp.name
-
 #testingJudge - funkcja z 1arg: mapa "nazwa->wartosc", zwracajaca krotke (liczba_wygranych, liczba_rozgrywek)
-def testing_judge(paramsValuesMap):
-    parameters_file = ParametersTempFile(paramsValuesMap)
-    match = Popen(['./match.py', './engine', './engine', parameters_file], stdout=PIPE, stderr=PIPE)
+def testing_judge(params):
+    match = Popen(['./match.py', './engine', './engine'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
+    for k, v in params.iteritems():
+        print >>match.stdin, k, v
+    match.stdin.close()
     result = match.wait()
-    os.remove(parameters_file)
 
     if result != 0:
         return (0, 0) #match failed
@@ -171,9 +165,6 @@ class Ucb: #call analyze() few times, and at last: bestElementsList()
             ret += "\n"
         return ret
 
-#signal.signal(signal.SIGINT, lambda x,y: printHandler(ucb, x, y))	#ustawienie obslugi sygnalu Ctrl+C
-	    #TODO: obsluga sygnalow przestala dzialac (przez uruchamianie runner1...) :-/
-
 class UcbThread(threading.Thread):
     def __init__(self, ucb):
         self.ucb = ucb
@@ -232,4 +223,5 @@ console.start()
 for thread in ucb_threads:
     thread.join()
 
+print
 print "Results:", ucb.summary(10)

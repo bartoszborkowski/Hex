@@ -7,7 +7,15 @@ import random, sys, os, stat
 from subprocess import Popen, PIPE
 from tempfile import NamedTemporaryFile
 
-def MakeWrapper(program, parameters):
+
+def make_parameters_file():
+    tmp = NamedTemporaryFile(prefix='params-', dir='.', delete=False)
+    for line in sys.stdin:
+        print >>tmp, line,
+    tmp.close()
+    return tmp.name
+
+def make_wrapper(program, parameters):
     wrapper = NamedTemporaryFile(prefix='wrapper-', dir='.', delete=False)
 
     print >>wrapper, r'''#!/bin/bash
@@ -25,7 +33,11 @@ function read_eqs()
     os.chmod(wrapper.name, stat.S_IRWXU)
     return wrapper.name
 
-def Match(base_program, program):
+def clean_up():
+    os.remove(wrapper)
+    os.remove(parameters)
+
+def match(base_program, program):
     first = random.randint(0, 1) #which program is about to play first
     programs = [base_program, program]
     judge = Popen(
@@ -36,6 +48,7 @@ def Match(base_program, program):
 
     if result != 0:
         print >> sys.stderr, 'match.py: judge-static returned error'
+        clean_up()
         exit(-1)
 
     line = judge.stdout.readlines()[-1].split('=')
@@ -46,14 +59,15 @@ def Match(base_program, program):
     else:
         return 1 - score
 
-if len(sys.argv) != 4:
-    print >> sys.stderr, 'USAGE: match.py <base_program> <program> <parameters file>'
+if len(sys.argv) != 3:
+    print >> sys.stderr, 'USAGE: match.py <base_program> <program>'
     exit(-1)
 
 base_program = sys.argv[1]
 program = sys.argv[2]
-parameters = sys.argv[3]
 
-wrapper = MakeWrapper(program, parameters)
-print Match(base_program, wrapper)
-os.remove(wrapper)
+parameters = make_parameters_file()
+wrapper = make_wrapper(program, parameters)
+
+print match(base_program, wrapper)
+clean_up()
