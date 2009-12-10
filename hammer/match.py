@@ -49,7 +49,7 @@ def match(base_program, program):
     #print first
     #print base_program 
     #print program
-    judge = Popen(["./judge-static", "-s", "-P 0", "-i./plik_11.txt", programs[first], programs[1 - first]], stdout = PIPE)
+    judge = Popen(["./judge-static", "-s", "-P 0", "-i./plik_11.txt", "./engine", "./engine"], stdout = PIPE)
 
     result = judge.wait() 
     if result != 0:

@@ -88,7 +88,3 @@ class RemoteMachinesHub:
 
       return result
 
-from parser import Parser
-
-rmh = RemoteMachinesHub(Parser().ParseRemoteMachines())
-print rmh.Execute(Parser().ParseParameters()[0])
