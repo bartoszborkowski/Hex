@@ -12,13 +12,13 @@ ALPHA = 3.0		#alfa 4 UCB
 PRIOR = (1,2)		#priot 4 UCB	(wins, visits)
 
 class UcbElem: #element of UCB-struct (contains one parameter combination)
-    def __init__(self, parameterFile):
-		self.parameterFile = parameterFile
-		self.wins = 0
-		self.visits = 0
-		self.win_rate = 0.0
-		self.value = float('inf')
-		self.update(PRIOR)
+    def __init__(self, parameterList):
+      self.parameterList = parameterList
+      self.wins = 0
+      self.visits = 0
+      self.win_rate = 0.0
+      self.value = float('inf')
+      self.update(PRIOR)
 
     def update(self, results):
         self.wins = self.wins + results[0]
@@ -28,23 +28,22 @@ class UcbElem: #element of UCB-struct (contains one parameter combination)
 
     def __repr__(self):
         retRepr = "ELEM({"
-        self.parameterFile.seek(0)
-        for line in self.parameterFile:
-            retRepr = retRepr + split('\n', line)[0] + " "
+        for parameter in self.parameterList:
+            retRepr = retRepr + parameter + " "
         retRepr = retRepr + "} win:%d vis: %d " % (self.wins, self.visits)
         retRepr = retRepr + "(rate:%f) val: %f)\n" % (self.win_rate, self.value)
         return retRepr
 
 class Ucb: #call analyze() few times, and at last: bestElementsList()
-    def __init__(self, hub, parameterFiles):
-		self.hub = hub
-		self.elements = []
-		for parameterFile in parameterFiles:
-			elem = UcbElem(parameterFile)
-			self.elements.append(elem)
-		self.visits_total = 0
-		self.played_games = 0
-		self.lock = threading.Lock()
+    def __init__(self, hub, parameterList):
+      self.hub = hub
+      self.elements = []
+      for parameter in parameterList:
+         elem = UcbElem(parameter)
+         self.elements.append(elem)
+      self.visits_total = 0
+      self.played_games = 0
+      self.lock = threading.Lock()
 
     def element_to_analyze(self): #assume lock is aquired
         maximum = max(self.elements, key=operator.attrgetter('value')).value
@@ -57,7 +56,7 @@ class Ucb: #call analyze() few times, and at last: bestElementsList()
             self.visits_total += 1
             to_analyze = self.element_to_analyze()
 
-        result_tuple = self.hub.Connect(to_analyze.parameterFile)
+        result_tuple = self.hub.Execute(to_analyze.parameterList
 
         with self.lock:
             self.played_games += result_tuple[1]
@@ -76,9 +75,8 @@ class Ucb: #call analyze() few times, and at last: bestElementsList()
         ret = "total visits: %d (played games: %d)\n" % (self.visits_total, self.played_games)
         for elem in self.best_elements_list()[:rows_num]:
             ret += "\t"
-            elem.parameterFile.seek(0)
-            for line in elem.parameterFile:
-                ret += split('\n', line)[0] + ", "
+            for parameter in elem.parameterList:
+                ret += parameter + ", "
             ret += "\t"
             ret += str(elem.win_rate) + " (wins: " + str(elem.wins) + " / visits: "  + str(elem.visits) + ")  "
             ret += "\n"
