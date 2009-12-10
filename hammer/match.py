@@ -4,22 +4,21 @@
 # Runs one match and return program-oriented (second parameter) score
 
 import random, sys, os, stat
+from re import split
 from subprocess import Popen, PIPE
 from tempfile import NamedTemporaryFile
-
 
 def make_parameters_file():
     tmp = NamedTemporaryFile(prefix='params-', dir='.', delete=False)
     line = sys.stdin.readline()
     while line != "\n":
-        print >> tmp, line
+        print >> tmp, split('\n', line)[0]
         line = sys.stdin.readline()
     tmp.close()
     return tmp.name
 
 def make_wrapper(program, parameters):
     wrapper = NamedTemporaryFile(prefix='wrapper-', dir='.', delete=False)
-
     print >>wrapper, r'''#!/bin/bash
 function read_eqs()
 {
@@ -49,9 +48,9 @@ def match(base_program, program):
     #print first
     #print base_program 
     #print program
-    judge = Popen(["./judge-static", "-s", "-P 0", "-i./plik_11.txt", "./engine", "./engine"], stdout = PIPE)
+    judge = Popen(["./judge-static", "-s", "-P 0", "-i./plik_11.txt", programs[first], programs[1 - first]], stdout = PIPE)
 
-    result = judge.wait() 
+    result = judge.wait()
     if result != 0:
         print >> sys.stderr, 'match.py: judge-static returned error'
         clean_up()
@@ -71,9 +70,6 @@ if len(sys.argv) != 3:
 
 base_program = sys.argv[1]
 program = sys.argv[2]
-#print "hello"
-#print base_program
-#print program
 
 parameters = make_parameters_file()
 wrapper = make_wrapper(program, parameters)

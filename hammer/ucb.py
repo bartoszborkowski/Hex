@@ -35,12 +35,13 @@ class UcbElem: #element of UCB-struct (contains one parameter combination)
         return retRepr
 
 class Ucb: #call analyze() few times, and at last: bestElementsList()
-    def __init__(self, hub, parameterList):
-      self.hub = hub
+    def __init__(self, parameterList, hub, engines):
       self.elements = []
       for parameter in parameterList:
          elem = UcbElem(parameter)
          self.elements.append(elem)
+      self.hub = hub
+      self.engines = engines
       self.visits_total = 0
       self.played_games = 0
       self.lock = threading.Lock()
@@ -51,12 +52,12 @@ class Ucb: #call analyze() few times, and at last: bestElementsList()
         random_idx = random.randint(0, len(max_list) - 1)
         return max_list[random_idx]
 
-    def analyze(self):
+    def analyze(self, ssh):
         with self.lock:
             self.visits_total += 1
             to_analyze = self.element_to_analyze()
 
-        result_tuple = self.hub.Execute(to_analyze.parameterList
+        result_tuple = self.hub.Execute(ssh, engines, to_analyze.parameterList)
 
         with self.lock:
             self.played_games += result_tuple[1]

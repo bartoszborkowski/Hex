@@ -18,73 +18,67 @@ class RemoteMachinesHub:
       self.lock = threading.Lock()
       self.semaphore = threading.Semaphore(len(self.remoteMachines))
 
-      #tmp = os.popen("pwd")
-      #self.path = split('\n', tmp.readline())[0]
-      #tmp.close()
-      self.path = "~/SIG/Hex/hammer"
-
    def __repr__(self):
       return remoteMachines
 
-   def Connect(self):
-      self.semaphore.acquire()
-      self.lock.acquire()
-      self.machine = self.remoteMachines.pop(0)
-      self.lock.release()
-
-      ssh_newkey = "Are you sure you want to continue connecting"
-      ssh = pexpect.spawn("ssh " + self.machine)
-
-      i = ssh.expect([ssh_newkey, "Password:", "\$", pexpect.TIMEOUT, pexpect.EOF])
-      if i == 0:
-         ssh.sendline("yes")
-         i = ssh.expect([ssh_newkey, "Password:", "\$", pexpect.TIMEOUT, pexpect.EOF])
-      if i == 1:
-         ssh.sendline("")     # password required
-         return ssh
-      if i == 2:              # connected
-         return ssh
-      else:
+   def Connect(self, password):
+      count = 0
+      while (True):
+         self.semaphore.acquire()
          self.lock.acquire()
-         self.remoteMachines.append(self.machine)
+         machine = self.remoteMachines.pop(0)
          self.lock.release()
-         self.semaphore.release()
-         return None
 
-   def Execute(self, parameterList):
-      ssh = None
-      while (ssh == None):
-         ssh = self.Connect()
+         count = count + 1
+         if count > 30:
+            raise Exception("could not establish a ssh connection")
 
-      #print "connected"
+         ssh_newkey = "Are you sure you want to continue connecting"
+         ssh = pexpect.spawn("ssh " + machine)
 
+         i = ssh.expect([ssh_newkey, "Password:", "\$", pexpect.TIMEOUT, pexpect.EOF])
+         if i == 0:
+            ssh.sendline("yes")
+            i = ssh.expect([ssh_newkey, "Password:", "\$", pexpect.TIMEOUT, pexpect.EOF])
+         if i == 1:
+            ssh.sendline(password)     # password required
+            return ssh
+         if i == 2:              # connected
+            return ssh
+         else:
+            self.lock.acquire()
+            self.remoteMachines.append(machine)
+            self.lock.release()
+            self.semaphore.release()
+
+   def Prepare(self, ssh, path):
+      ssh.expect("\$")
       ssh.setecho(False)
-      ssh.sendline("cd " + self.path)
-      ssh.readline() # shouldn't be necessary but is
-      ssh.sendline("./match.py ./engine ./engine")
+      ssh.sendline("cd " + path)
+      ssh.readline() # shouldn't be necessary, but is, and I have no idea as to why
+
+   def Execute(self, ssh, parameterList, engines):
+      ssh.sendline("./match.py " + engines[0] + " " + engines[1])
       ssh.readline()
 
       for parameter in parameterList:
          ssh.sendline(parameter)
-	 ssh.readline()
+         ssh.readline()
 
       ssh.sendline("")
       ssh.readline()
+      r = ssh.readline()
+      print r
 
-      #print ssh.readline()
-      #print ssh.readline()
-
-      if (split('\r', ssh.readline())[0] == "0"):
+      if (split('\r', r)[0] == "0"):
          result = (0, 1)
       else:
          result = (1, 1)
 
-      ssh.close()
-
-      self.lock.acquire()
-      self.remoteMachines.append(self.machine)
-      self.lock.release()
-      self.semaphore.release()
-
       return result
+
+#from parser import Parser
+
+#rmh = RemoteMachinesHub(Parser().ParseRemoteMachines())
+#print rmh.Execute(Parser().ParseParameters()[0])
 
