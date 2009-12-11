@@ -41,13 +41,6 @@ def clean_up():
 def match(base_program, program):
     first = random.randint(0, 1) #which program is about to play first
     programs = [base_program, program]
-    #judge = Popen(
-    #    ['./judge-static', '-s', '-P 0', '-i', 'plik_11.txt',
-    #        programs[first], programs[1 - first]],
-    #    stdout=PIPE)
-    #print first
-    #print base_program 
-    #print program
     judge = Popen(["./judge-static", "-s", "-P 0", "-i./plik_11.txt", programs[first], programs[1 - first]], stdout = PIPE)
 
     result = judge.wait()

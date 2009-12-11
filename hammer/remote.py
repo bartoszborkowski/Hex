@@ -42,6 +42,7 @@ class RemoteMachinesHub:
             i = ssh.expect([ssh_newkey, "Password:", "\$", pexpect.TIMEOUT, pexpect.EOF])
          if i == 1:
             ssh.sendline(password)     # password required
+            ssh.expect("\$")
             return ssh
          if i == 2:              # connected
             return ssh
@@ -52,12 +53,12 @@ class RemoteMachinesHub:
             self.semaphore.release()
 
    def Prepare(self, ssh, path):
-      ssh.expect("\$")
       ssh.setecho(False)
       ssh.sendline("cd " + path)
       ssh.readline() # shouldn't be necessary, but is, and I have no idea as to why
+      return ssh
 
-   def Execute(self, ssh, parameterList, engines):
+   def Execute(self, ssh, engines, parameterList):
       ssh.sendline("./match.py " + engines[0] + " " + engines[1])
       ssh.readline()
 
@@ -67,10 +68,8 @@ class RemoteMachinesHub:
 
       ssh.sendline("")
       ssh.readline()
-      r = ssh.readline()
-      print r
 
-      if (split('\r', r)[0] == "0"):
+      if (split('\r', ssh.readline())[0] == "0"):
          result = (0, 1)
       else:
          result = (1, 1)

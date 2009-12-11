@@ -12,32 +12,11 @@ from ucb import Ucb
 
 THREADS_NUM = 3
 
-#testingJudge - funkcja z 1arg: mapa "nazwa->wartosc", zwracajaca krotke (liczba_wygranych, liczba_rozgrywek)
-# Bartek : we no longer need this function, judge is called directly from UCBTree
-#def testing_judge(params, hub):
-
-	#return hub.Connect(params)
-
-    #match = Popen(['./match.py', './engine', './engine'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
-    #for k, v in params.iteritems():
-        #print >>match.stdin, k, v
-    #match.stdin.close()
-    #result = match.wait()
-
-    #if result != 0:
-        #return (0, 0) #match failed
-
-    #out = match.stdout.readlines()[0]
-    #if out[0] == '0':
-        #return (0, 1)
-    #else:
-        #return (1, 1)
-
 class UcbThread(threading.Thread):
     def __init__(self, ucb, hub, path, password):
         self.ucb = ucb
         self.ssh = hub.Connect(password)
-        hub.Prepare(self.ssh, path)
+        self.ssh = hub.Prepare(self.ssh, path)
         self.done = False
         self.lock = threading.Lock()
         threading.Thread.__init__(self)
@@ -51,7 +30,7 @@ class UcbThread(threading.Thread):
             with self.lock:
                 if self.done:
                     break
-            self.ucb.analyze(ssh)
+            self.ucb.analyze(self.ssh)
 
     def quit(self):
         with self.lock:
@@ -99,13 +78,17 @@ ucb_threads = []
 for i in xrange(THREADS_NUM):
     try:
         thread = UcbThread(ucb, hub, path, password)
-        thread.start()
+        #thread.start()
         ucb_threads.append(thread)
+        print "hammer> Thread", i, "connected"
     except Exception as e:
         print >> sys.stderr, "Thread", i, e
 
 console = ConsoleThread(ucb, ucb_threads)
 console.start()
+
+for thread in ucb_threads:
+    thread.start()
 
 for thread in ucb_threads:
     thread.join()

@@ -57,7 +57,7 @@ class Ucb: #call analyze() few times, and at last: bestElementsList()
             self.visits_total += 1
             to_analyze = self.element_to_analyze()
 
-        result_tuple = self.hub.Execute(ssh, engines, to_analyze.parameterList)
+        result_tuple = self.hub.Execute(ssh, self.engines, to_analyze.parameterList)
 
         with self.lock:
             self.played_games += result_tuple[1]
