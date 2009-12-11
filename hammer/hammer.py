@@ -26,7 +26,7 @@ class UcbThread(threading.Thread):
         self.ssh.close()
 
     def run(self):
-        for i in xrange(50):
+        while (True):
             with self.lock:
                 if self.done:
                     break
