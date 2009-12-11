@@ -9,7 +9,7 @@ from re import split
 from subprocess import Popen, PIPE
 
 ALPHA = 3.0		#alfa 4 UCB
-PRIOR = (1,2)		#priot 4 UCB	(wins, visits)
+PRIOR = (5,6)		#priot 4 UCB	(wins, visits)
 
 class UcbElem: #element of UCB-struct (contains one parameter combination)
     def __init__(self, parameterList):
