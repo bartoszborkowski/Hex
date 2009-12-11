@@ -59,7 +59,7 @@ class RemoteMachinesHub:
       return ssh
 
    def Execute(self, ssh, engines, parameterList):
-      ssh.sendline("./match.py " + engines[0] + " " + engines[1])
+      ssh.sendline("./match.py " + engines[0] + " " + engines[1] + " 2>/dev/null")
       ssh.readline()
 
       for parameter in parameterList:
