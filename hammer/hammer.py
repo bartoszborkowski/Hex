@@ -54,7 +54,7 @@ class ConsoleThread(threading.Thread):
                 self.stat()
 
     def stat(self):
-        print 'Partial results:', self.ucb.summary(5)
+        print 'Partial results:', self.ucb.summary(10)
 
     def quit(self):
         print 'Quit scheduled'
